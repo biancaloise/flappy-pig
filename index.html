@@ -1,181 +1,177 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Flappy Pig</title>
 <style>
-  body {
+  html, body {
     margin: 0;
+    padding: 0;
+    background: linear-gradient(#cceaff, #ffffff);
     overflow: hidden;
-    background: linear-gradient(to bottom, #ffe6f0, #ffd6e8);
+    font-family: 'Comic Sans MS', cursive;
   }
+
   canvas {
     display: block;
-    margin: 0 auto;
+    margin: auto;
     background: transparent;
-    position: relative;
-    z-index: 1;
   }
-  #heartBtn, #retryBtn {
+
+  #heartButton, #retryButton {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    background-color: pink;
+    padding: 10px 20px;
     border: none;
-    border-radius: 50%;
-    width: 70px;
-    height: 70px;
-    font-size: 30px;
-    color: white;
+    border-radius: 50px;
+    font-size: 20px;
     cursor: pointer;
+    background: pink;
+    color: white;
+    font-weight: bold;
+    font-family: 'Comic Sans MS', cursive;
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    z-index: 2;
   }
-  #heartBtn {
-    bottom: 20px;
+
+  #heartButton {
+    bottom: 30px;
   }
-  #retryBtn {
-    display: none;
+
+  #retryButton {
     top: 50%;
-    transform: translate(-50%, -50%);
-    background-color: #ff9ecf;
+    display: none;
   }
 </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
-<button id="heartBtn">💖</button>
-<button id="retryBtn">Retry</button>
+
+<canvas id="gameCanvas" width="400" height="600"></canvas>
+<button id="heartButton">❤️ Jump</button>
+<button id="retryButton">🔄 Retry</button>
 
 <script>
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-let pig = { x: 50, y: canvas.height/2, radius: 20, gravity: 0.6, lift: -10, velocity: 0 };
+let pigImg = new Image();
+pigImg.src = 'https://i.ibb.co/ysv2nSg/pig-wings.png'; // cute pig with wings
+
+let cloudImg = new Image();
+cloudImg.src = 'https://i.ibb.co/7NYBn0n/cloud.png';
+
+let sparkleImg = new Image();
+sparkleImg.src = 'https://i.ibb.co/9tQtbT6/sparkle.png';
+
+let pipeTopImg = new Image();
+pipeTopImg.src = 'https://i.ibb.co/9n9f0PL/pipe-top.png';
+
+let pipeBottomImg = new Image();
+pipeBottomImg.src = 'https://i.ibb.co/f9gHrMc/pipe-bottom.png';
+
+let pig = { x: 50, y: 150, width: 40, height: 40, gravity: 0.25, lift: -5, velocity: 0 };
 let pipes = [];
-let frame = 0;
 let score = 0;
 let gameOver = false;
+let frame = 0;
 
-// sparkle background
-let sparkles = [];
-for (let i = 0; i < 80; i++) {
-  sparkles.push({
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
-    r: Math.random() * 2 + 1,
-    dy: Math.random() * 0.5 + 0.2
-  });
-}
-
-function drawSparkles() {
-  ctx.fillStyle = "white";
-  sparkles.forEach(s => {
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
-    ctx.fill();
-    s.y += s.dy;
-    if (s.y > canvas.height) {
-      s.y = -5;
-      s.x = Math.random() * canvas.width;
-    }
-  });
-}
-
-function drawPig() {
-  ctx.fillStyle = "#ffb6c1";
-  ctx.beginPath();
-  ctx.arc(pig.x, pig.y, pig.radius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#000";
-  ctx.beginPath();
-  ctx.arc(pig.x + 8, pig.y - 5, 3, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawPipes() {
-  ctx.fillStyle = "#ff99bb";
-  pipes.forEach(pipe => {
-    ctx.fillRect(pipe.x, 0, pipe.width, pipe.top);
-    ctx.fillRect(pipe.x, canvas.height - pipe.bottom, pipe.width, pipe.bottom);
-  });
-}
-
-function update() {
-  if (gameOver) return;
-  frame++;
-  pig.velocity += pig.gravity;
-  pig.y += pig.velocity;
-
-  if (frame % 90 === 0) {
-    let top = Math.random() * (canvas.height/2);
-    let gap = 150;
-    pipes.push({ x: canvas.width, width: 50, top: top, bottom: canvas.height - top - gap });
-  }
-
-  pipes.forEach(pipe => {
-    pipe.x -= 3;
-    if (pig.x + pig.radius > pipe.x && pig.x - pig.radius < pipe.x + pipe.width &&
-        (pig.y - pig.radius < pipe.top || pig.y + pig.radius > canvas.height - pipe.bottom)) {
-      endGame();
-    }
-    if (pipe.x + pipe.width < pig.x && !pipe.passed) {
-      score++;
-      pipe.passed = true;
-    }
-  });
-
-  if (pig.y + pig.radius > canvas.height || pig.y - pig.radius < 0) {
-    endGame();
-  }
-}
-
-function endGame() {
-  gameOver = true;
-  document.getElementById("retryBtn").style.display = "block";
-}
-
-function drawScore() {
-  ctx.fillStyle = "#fff";
-  ctx.font = "24px Arial";
-  ctx.fillText(`Score: ${score}`, 20, 40);
-}
-
-function loop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawSparkles();
-  drawPipes();
-  drawPig();
-  drawScore();
-  update();
-  requestAnimationFrame(loop);
-}
-
+// jump function
 function jump() {
   if (!gameOver) {
     pig.velocity = pig.lift;
   }
 }
 
-document.addEventListener("keydown", e => {
-  if (e.code === "Space") jump();
-});
-document.getElementById("heartBtn").addEventListener("click", jump);
-document.getElementById("retryBtn").addEventListener("click", () => {
-  pig = { x: 50, y: canvas.height/2, radius: 20, gravity: 0.6, lift: -10, velocity: 0 };
+// game over + retry
+function endGame() {
+  gameOver = true;
+  document.getElementById('retryButton').style.display = 'block';
+}
+
+// reset
+function resetGame() {
+  pig.y = 150;
+  pig.velocity = 0;
   pipes = [];
   score = 0;
   gameOver = false;
-  document.getElementById("retryBtn").style.display = "none";
+  document.getElementById('retryButton').style.display = 'none';
+}
+
+// pipe generator
+function createPipe() {
+  let gap = 120;
+  let topHeight = Math.floor(Math.random() * (canvas.height - gap - 100)) + 50;
+  pipes.push({ x: canvas.width, top: topHeight, bottom: topHeight + gap });
+}
+
+// main game loop
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // background sparkles
+  for (let i = 0; i < canvas.width; i += 80) {
+    for (let j = 0; j < canvas.height; j += 80) {
+      ctx.drawImage(sparkleImg, i, j, 30, 30);
+    }
+  }
+
+  // clouds
+  ctx.drawImage(cloudImg, 50, 50, 100, 60);
+  ctx.drawImage(cloudImg, 250, 120, 120, 70);
+
+  // pig
+  ctx.drawImage(pigImg, pig.x, pig.y, pig.width, pig.height);
+
+  // pipes
+  for (let i = 0; i < pipes.length; i++) {
+    ctx.drawImage(pipeTopImg, pipes[i].x, pipes[i].top - pipeTopImg.height);
+    ctx.drawImage(pipeBottomImg, pipes[i].x, pipes[i].bottom);
+
+    pipes[i].x -= 2;
+
+    // collision
+    if (pig.x + pig.width > pipes[i].x && pig.x < pipes[i].x + 50 &&
+        (pig.y < pipes[i].top || pig.y + pig.height > pipes[i].bottom)) {
+      endGame();
+    }
+
+    // score
+    if (pipes[i].x === pig.x) score++;
+  }
+
+  // pig physics
+  pig.velocity += pig.gravity;
+  pig.y += pig.velocity;
+
+  if (pig.y + pig.height >= canvas.height || pig.y <= 0) {
+    endGame();
+  }
+
+  // score text
+  ctx.fillStyle = 'hotpink';
+  ctx.font = '30px Comic Sans MS';
+  ctx.fillText(score, canvas.width / 2 - 10, 50);
+
+  if (!gameOver) requestAnimationFrame(draw);
+}
+
+// pipe interval
+setInterval(() => {
+  if (!gameOver) createPipe();
+}, 2000);
+
+document.getElementById('heartButton').addEventListener('click', jump);
+document.getElementById('retryButton').addEventListener('click', resetGame);
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') jump();
 });
 
-loop();
+// start game
+draw();
 </script>
-</body>
-</html>
-</script>
+
 </body>
 </html>
