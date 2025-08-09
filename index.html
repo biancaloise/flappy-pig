@@ -1,177 +1,277 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Flappy Pig</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>flappy pig (canvas-only)</title>
 <style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    background: linear-gradient(#cceaff, #ffffff);
-    overflow: hidden;
-    font-family: 'Comic Sans MS', cursive;
+  :root{
+    --pink:#ffb6c1;
+    --accent:#ff6b9a;
+    --bg1:#fff7fb;
+    --bg2:#fff0f6;
+    --pipe:#bfeec0;
   }
-
-  canvas {
-    display: block;
-    margin: auto;
-    background: transparent;
-  }
-
-  #heartButton, #retryButton {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px 20px;
-    border: none;
-    border-radius: 50px;
-    font-size: 20px;
-    cursor: pointer;
-    background: pink;
-    color: white;
-    font-weight: bold;
-    font-family: 'Comic Sans MS', cursive;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-  }
-
-  #heartButton {
-    bottom: 30px;
-  }
-
-  #retryButton {
-    top: 50%;
-    display: none;
-  }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg1),var(--bg2));display:flex;align-items:center;justify-content:center;font-family: "Comic Sans MS", "Trebuchet MS", system-ui, sans-serif;}
+  .wrap{position:relative;width:400px;max-width:calc(100vw - 20px);}
+  canvas{width:100%;height:auto;display:block;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,0.12);background:transparent;}
+  #heartBtn{position:absolute;left:50%;transform:translateX(-50%);bottom:14px;width:72px;height:72px;border-radius:50%;border:none;background:linear-gradient(#ff8db1,#ff5b86);color:white;font-size:30px;box-shadow:0 8px 20px rgba(255,91,138,0.22);cursor:pointer;z-index:20}
+  #retryBtn{position:absolute;left:50%;transform:translate(-50%,-50%);top:50%;padding:12px 18px;border-radius:18px;border:3px solid #ffd1e6;background:linear-gradient(#fff,#ffeef7);color:#ff5b8a;font-weight:700;font-size:18px;display:none;z-index:21;cursor:pointer}
+  .score{position:absolute;left:12px;top:12px;background:rgba(255,255,255,0.12);padding:8px 12px;border-radius:12px;color:#fff;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.25);z-index:19}
+  .hint{position:absolute;right:12px;top:12px;color:#ff4678;background:rgba(255,255,255,0.12);padding:6px 10px;border-radius:10px;z-index:19}
+  @media (min-width:700px){ .wrap{width:420px} }
 </style>
 </head>
 <body>
-
-<canvas id="gameCanvas" width="400" height="600"></canvas>
-<button id="heartButton">❤️ Jump</button>
-<button id="retryButton">🔄 Retry</button>
+  <div class="wrap">
+    <canvas id="c"></canvas>
+    <div class="score" id="score">score: 0</div>
+    <div class="hint" id="hint">tap heart / click / space</div>
+    <button id="heartBtn" aria-label="flap">💖</button>
+    <button id="retryBtn">try again ✨</button>
+  </div>
 
 <script>
-const canvas = document.getElementById('gameCanvas');
+/* flappy pig - canvas only */
+const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+const wrap = document.querySelector('.wrap');
+const heartBtn = document.getElementById('heartBtn');
+const retryBtn = document.getElementById('retryBtn');
+const scoreEl = document.getElementById('score');
+const hintEl = document.getElementById('hint');
 
-let pigImg = new Image();
-pigImg.src = 'https://i.ibb.co/ysv2nSg/pig-wings.png'; // cute pig with wings
+const LOGICAL_W = 400, LOGICAL_H = 600;
+canvas.width = LOGICAL_W;
+canvas.height = LOGICAL_H;
 
-let cloudImg = new Image();
-cloudImg.src = 'https://i.ibb.co/7NYBn0n/cloud.png';
+// game vars
+let pig, pipes, clouds, sparkles, frame, running, score, highscore;
 
-let sparkleImg = new Image();
-sparkleImg.src = 'https://i.ibb.co/9tQtbT6/sparkle.png';
+// tuning
+const GRAVITY = 0.45, LIFT = -9.2;
+const PIPE_GAP = 150, PIPE_W = 56;
+const PIPE_FREQ = 100; // frames
+const PIPE_SPEED = 2.6;
 
-let pipeTopImg = new Image();
-pipeTopImg.src = 'https://i.ibb.co/9n9f0PL/pipe-top.png';
+// helpers
+const rand = (a,b)=> Math.random()*(b-a)+a;
+const clamp = (v,a,b)=> Math.max(a,Math.min(b,v));
 
-let pipeBottomImg = new Image();
-pipeBottomImg.src = 'https://i.ibb.co/f9gHrMc/pipe-bottom.png';
-
-let pig = { x: 50, y: 150, width: 40, height: 40, gravity: 0.25, lift: -5, velocity: 0 };
-let pipes = [];
-let score = 0;
-let gameOver = false;
-let frame = 0;
-
-// jump function
-function jump() {
-  if (!gameOver) {
-    pig.velocity = pig.lift;
-  }
-}
-
-// game over + retry
-function endGame() {
-  gameOver = true;
-  document.getElementById('retryButton').style.display = 'block';
-}
-
-// reset
-function resetGame() {
-  pig.y = 150;
-  pig.velocity = 0;
+// reset / init
+function init(){
+  pig = { x:86, y:LOGICAL_H/2, r:22, vy:0, rot:0, wing:0 };
   pipes = [];
+  clouds = [];
+  sparkles = [];
+  frame = 0;
+  running = true;
   score = 0;
-  gameOver = false;
-  document.getElementById('retryButton').style.display = 'none';
+  scoreEl.textContent = 'score: 0';
+  retryBtn.style.display = 'none';
+  hintEl.style.opacity = 1;
+  highscore = Number(localStorage.getItem('flappypig_high')||0);
+
+  for(let i=0;i<6;i++) clouds.push({ x:rand(-200,LOGICAL_W+200), y:rand(40,LOGICAL_H*0.6), s:rand(0.7,1.4), speed:rand(0.15,0.6), a:rand(0.35,0.9) });
+  for(let i=0;i<80;i++) sparkles.push({ x:rand(0,LOGICAL_W), y:rand(0,LOGICAL_H), r:rand(0.5,2.2), a:rand(0.2,0.9), dy:rand(0.2,0.9), tw:rand(0.01,0.05) });
 }
 
-// pipe generator
-function createPipe() {
-  let gap = 120;
-  let topHeight = Math.floor(Math.random() * (canvas.height - gap - 100)) + 50;
-  pipes.push({ x: canvas.width, top: topHeight, bottom: topHeight + gap });
+// draw rounded rect helper
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+  ctx.fill();
 }
 
-// main game loop
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+// draw clouds (vector)
+function drawClouds(){
+  for(const c of clouds){
+    ctx.globalAlpha = c.a;
+    ctx.fillStyle = '#ffffff';
+    const cx = c.x, cy = c.y, s = c.s;
+    ctx.beginPath();
+    ctx.ellipse(cx-30*s, cy, 28*s, 18*s, 0,0,Math.PI*2);
+    ctx.ellipse(cx, cy-6*s, 36*s, 22*s, 0,0,Math.PI*2);
+    ctx.ellipse(cx+30*s, cy, 26*s, 18*s, 0,0,Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    c.x += c.speed;
+    if(c.x - 80*s > LOGICAL_W) c.x = -80*s - rand(10,200);
+  }
+}
 
-  // background sparkles
-  for (let i = 0; i < canvas.width; i += 80) {
-    for (let j = 0; j < canvas.height; j += 80) {
-      ctx.drawImage(sparkleImg, i, j, 30, 30);
-    }
+// draw sparkles
+function drawSparkles(){
+  for(const s of sparkles){
+    ctx.globalAlpha = s.a * (0.6 + 0.4*Math.sin(frame*s.tw + s.x*0.01));
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    s.y += s.dy;
+    if(s.y > LOGICAL_H + 6){ s.y = -6; s.x = rand(0,LOGICAL_W); }
+  }
+}
+
+// draw pig vector with flapping wings
+function drawPig(p){
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.rot);
+
+  // shadow
+  ctx.beginPath(); ctx.fillStyle = 'rgba(0,0,0,0.06)'; ctx.ellipse(6, 22, 28, 12, 0,0,Math.PI*2); ctx.fill();
+
+  // body
+  ctx.beginPath(); ctx.fillStyle = '#ffb6c1'; ctx.ellipse(0,0,p.r+2,p.r,0,0,Math.PI*2); ctx.fill();
+  // belly highlight
+  ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.ellipse(-6,-4,p.r*0.9,p.r*0.45,-0.4,0,Math.PI*2); ctx.fill();
+
+  // wings
+  const wing = Math.sin(p.wing)*0.95;
+  // left
+  ctx.save(); ctx.translate(-p.r*0.9,-6); ctx.rotate(-0.6 + wing*0.5); ctx.beginPath(); ctx.fillStyle = '#fff8fc';
+  ctx.moveTo(0,0); ctx.quadraticCurveTo(-28,-10,-46,6); ctx.quadraticCurveTo(-34,12,-10,6); ctx.closePath(); ctx.fill(); ctx.restore();
+  // right
+  ctx.save(); ctx.translate(p.r*0.9,-6); ctx.rotate(0.6 - wing*0.5); ctx.beginPath(); ctx.fillStyle = '#fff8fc';
+  ctx.moveTo(0,0); ctx.quadraticCurveTo(28,-10,46,6); ctx.quadraticCurveTo(34,12,10,6); ctx.closePath(); ctx.fill(); ctx.restore();
+
+  // ears
+  ctx.beginPath(); ctx.fillStyle = '#ff9fb9'; ctx.moveTo(-10,-p.r-6); ctx.quadraticCurveTo(-18,-p.r-18,-4,-p.r-14); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(10,-p.r-6); ctx.quadraticCurveTo(18,-p.r-18,4,-p.r-14); ctx.fill();
+
+  // eyes
+  ctx.beginPath(); ctx.fillStyle = '#000'; ctx.arc(-7,-4,3.2,0,Math.PI*2); ctx.arc(7,-4,3.2,0,Math.PI*2); ctx.fill();
+
+  // blush
+  ctx.beginPath(); ctx.fillStyle = '#ff8bb3'; ctx.ellipse(-12,4,4,2.6,0,0,Math.PI*2); ctx.ellipse(12,4,4,2.6,0,0,Math.PI*2); ctx.fill();
+
+  // snout
+  ctx.beginPath(); ctx.fillStyle = '#ffc0cb'; ctx.ellipse(0,6,8,6,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.fillStyle = '#000'; ctx.arc(-2,6,1.1,0,Math.PI*2); ctx.arc(2,6,1.1,0,Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+// draw pipes (rounded caps)
+function drawPipes(){
+  for(const p of pipes){
+    // top pipe
+    ctx.fillStyle = '#bfeec0';
+    roundRect(p.x, 0, p.w, p.top, 14);
+    ctx.fillStyle = 'rgba(0,0,0,0.04)'; ctx.fillRect(p.x+6, 0, p.w-12, p.top-6);
+
+    // bottom pipe
+    ctx.fillStyle = '#bfeec0';
+    roundRect(p.x, LOGICAL_H - p.bottom, p.w, p.bottom, 14);
+    ctx.fillStyle = 'rgba(0,0,0,0.04)'; ctx.fillRect(p.x+6, LOGICAL_H - p.bottom + 6, p.w-12, p.bottom-6);
+  }
+}
+
+// main update
+function update(){
+  if(!running) return;
+  frame++;
+  pig.vy += GRAVITY;
+  pig.y += pig.vy;
+  pig.rot = clamp(pig.vy/12,-0.6,1);
+  pig.wing += 0.26 + Math.abs(pig.vy)*0.02;
+
+  // spawn pipes
+  if(frame % PIPE_FREQ === 0){
+    const top = rand(60, LOGICAL_H - 160 - 60);
+    const bottom = LOGICAL_H - top - PIPE_GAP;
+    pipes.push({ x: LOGICAL_W + 10, w: PIPE_W, top, bottom, passed:false });
   }
 
-  // clouds
-  ctx.drawImage(cloudImg, 50, 50, 100, 60);
-  ctx.drawImage(cloudImg, 250, 120, 120, 70);
+  // move pipes & check score
+  for(const p of pipes) p.x -= PIPE_SPEED;
+  if(pipes.length && pipes[0].x + pipes[0].w < -20) pipes.shift();
 
-  // pig
-  ctx.drawImage(pigImg, pig.x, pig.y, pig.width, pig.height);
-
-  // pipes
-  for (let i = 0; i < pipes.length; i++) {
-    ctx.drawImage(pipeTopImg, pipes[i].x, pipes[i].top - pipeTopImg.height);
-    ctx.drawImage(pipeBottomImg, pipes[i].x, pipes[i].bottom);
-
-    pipes[i].x -= 2;
-
+  for(const p of pipes){
+    if(!p.passed && p.x + p.w < pig.x - pig.r){
+      p.passed = true; score++; scoreEl.textContent = 'score: ' + score;
+      if(score > highscore){ highscore = score; localStorage.setItem('flappypig_high', highscore); }
+    }
     // collision
-    if (pig.x + pig.width > pipes[i].x && pig.x < pipes[i].x + 50 &&
-        (pig.y < pipes[i].top || pig.y + pig.height > pipes[i].bottom)) {
-      endGame();
+    if(p.x < pig.x + pig.r && p.x + p.w > pig.x - pig.r){
+      if(pig.y - pig.r < p.top || pig.y + pig.r > LOGICAL_H - p.bottom) stop();
     }
-
-    // score
-    if (pipes[i].x === pig.x) score++;
   }
 
-  // pig physics
-  pig.velocity += pig.gravity;
-  pig.y += pig.velocity;
+  // floor/ceiling
+  if(pig.y + pig.r > LOGICAL_H || pig.y - pig.r < 0) stop();
 
-  if (pig.y + pig.height >= canvas.height || pig.y <= 0) {
-    endGame();
-  }
-
-  // score text
-  ctx.fillStyle = 'hotpink';
-  ctx.font = '30px Comic Sans MS';
-  ctx.fillText(score, canvas.width / 2 - 10, 50);
-
-  if (!gameOver) requestAnimationFrame(draw);
+  // move clouds & sparkles
+  for(const c of clouds){ c.x += c.speed; if(c.x - 80*c.s > LOGICAL_W) c.x = -80*c.s - rand(10,200); }
+  for(const s of sparkles){ s.y += s.dy; if(s.y > LOGICAL_H+6){ s.y = -6; s.x = rand(0,LOGICAL_W); } }
 }
 
-// pipe interval
-setInterval(() => {
-  if (!gameOver) createPipe();
-}, 2000);
+// stop game
+function stop(){
+  running = false;
+  retryBtn.style.display = 'block';
+  hintEl.style.opacity = 0;
+}
 
-document.getElementById('heartButton').addEventListener('click', jump);
-document.getElementById('retryButton').addEventListener('click', resetGame);
+// render everything
+function render(){
+  // clear & sky
+  const g = ctx.createLinearGradient(0,0,0,LOGICAL_H);
+  g.addColorStop(0,'#fff7fb'); g.addColorStop(1,'#fff0f6');
+  ctx.fillStyle = g; ctx.fillRect(0,0,LOGICAL_W,LOGICAL_H);
 
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space') jump();
-});
+  drawSparkles(); // behind
+  drawClouds();
+  // ground
+  ctx.fillStyle = '#fff1f8'; ctx.fillRect(0, LOGICAL_H - 36, LOGICAL_W, 36);
+  ctx.fillStyle = 'rgba(0,0,0,0.03)'; ctx.fillRect(0, LOGICAL_H - 36, LOGICAL_W, 3);
 
-// start game
-draw();
+  drawPipes();
+  drawPig(pig);
+}
+
+// wrapper small functions for drawing lists
+function drawClouds(){ for(const c of clouds){ ctx.globalAlpha = c.a; ctx.fillStyle = '#ffffff'; const cx=c.x,cy=c.y,s=c.s; ctx.beginPath(); ctx.ellipse(cx-30*s,cy,28*s,18*s,0,0,Math.PI*2); ctx.ellipse(cx,cy-6*s,36*s,22*s,0,0,Math.PI*2); ctx.ellipse(cx+30*s,cy,26*s,18*s,0,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } }
+function drawSparkles(){ for(const s of sparkles){ ctx.globalAlpha = s.a*(0.6+0.4*Math.sin(frame*s.tw + s.x*0.01)); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; } }
+
+// main loop
+let rafId;
+function loop(){
+  update();
+  render();
+  rafId = requestAnimationFrame(loop);
+}
+
+// flap
+function flap(){
+  if(!running){ restart(); return; }
+  pig.vy = LIFT;
+  pig.wing += 0.8;
+  hintEl.style.opacity = 0.15;
+}
+
+// restart
+function restart(){
+  cancelAnimationFrame(rafId);
+  init();
+  loop();
+}
+
+// input
+window.addEventListener('keydown', e => { if(e.code === 'Space'){ e.preventDefault(); flap(); }});
+canvas.addEventListener('mousedown', ()=> flap());
+canvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); flap(); }, {passive:false});
+heartBtn.addEventListener('click', ()=> flap());
+retryBtn.addEventListener('click', ()=> restart());
+window.addEventListener('resize', ()=>{ /* canvas css handles scaling */ });
+
+// start
+init(); loop();
 </script>
-
 </body>
 </html>
