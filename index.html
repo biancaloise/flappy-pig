@@ -19,20 +19,66 @@
   #retryBtn{position:absolute;left:50%;transform:translate(-50%,-50%);top:50%;padding:12px 18px;border-radius:18px;border:3px solid #ffd1e6;background:linear-gradient(#fff,#ffeef7);color:#ff5b8a;font-weight:700;font-size:18px;display:none;z-index:21;cursor:pointer}
   .score{position:absolute;left:12px;top:12px;background:rgba(255,255,255,0.12);padding:8px 12px;border-radius:12px;color:#fff;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.25);z-index:19}
   .hint{position:absolute;right:12px;top:12px;color:#ff4678;background:rgba(255,255,255,0.12);padding:6px 10px;border-radius:10px;z-index:19}
+  /* Start overlay & leaderboard additions */
+  #startOverlay {
+    position:absolute;
+    inset:0;
+    background: rgba(255,255,255,0.92);
+    z-index:40;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:18px;
+    box-sizing:border-box;
+  }
+  #startCard{
+    width:320px;
+    background: linear-gradient(180deg,#fff,#fff7fb);
+    border-radius:12px;
+    padding:14px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.08);
+    text-align:center;
+    border:2px solid #ffdce8;
+  }
+  #nameInput { width:100%; padding:10px; font-size:16px; border-radius:8px; border:2px solid #ffdde8; margin-bottom:8px; box-sizing:border-box; }
+  #startBtn { width:100%; padding:10px; font-size:16px; border-radius:10px; border:none; background:linear-gradient(#ff8db1,#ff5b86); color:white; cursor:pointer; }
+  #leaderboardBox { margin-top:10px; max-height:160px; overflow:auto; text-align:left; background:rgba(255,255,255,0.85); padding:8px; border-radius:8px; border:1px solid #ffe6f0; }
+  #leaderboardBox h4 { margin:6px 0; color:#ff4678; font-size:14px; }
+  #loiseTag { position:absolute; left:50%; transform:translateX(-50%); bottom:6px; color:#ff6b9a; font-weight:700; z-index:30; }
   @media (min-width:700px){ .wrap{width:420px} }
 </style>
 </head>
 <body>
   <div class="wrap">
+    <!-- START OVERLAY (added) -->
+    <div id="startOverlay">
+      <div id="startCard" role="dialog" aria-modal="true">
+        <div style="font-size:20px;color:#ff4678;margin-bottom:8px">🐷 Flappy Pig</div>
+        <input id="nameInput" placeholder="Enter your name (max 20 chars)" maxlength="20" />
+        <button id="startBtn">Start</button>
+
+        <div id="leaderboardBox">
+          <h4>Leaderboard (local)</h4>
+          <div id="leaderboardList" style="font-size:14px;color:#333">loading...</div>
+        </div>
+
+        <div style="font-size:12px;color:#777;margin-top:8px">Scores are saved locally (github pages compatible). Enter a name before starting.</div>
+      </div>
+    </div>
+
+    <!-- original elements (kept) -->
     <canvas id="c"></canvas>
     <div class="score" id="score">score: 0</div>
     <div class="hint" id="hint">tap heart / click / space</div>
     <button id="heartBtn" aria-label="flap">💖</button>
     <button id="retryBtn">try again ✨</button>
+
+    <div id="loiseTag">loise cute :P</div>
   </div>
 
 <script>
 /* flappy pig - canvas only */
+/* --- ORIGINAL CODE + ADDED START/LEADERBOARD LOGIC --- */
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const wrap = document.querySelector('.wrap');
@@ -58,6 +104,57 @@ const PIPE_SPEED = 2.6;
 const rand = (a,b)=> Math.random()*(b-a)+a;
 const clamp = (v,a,b)=> Math.max(a,Math.min(b,v));
 
+/* ------------------ ADDED: start & leaderboard state ------------------ */
+let playerName = null; // set when user presses Start
+const LB_KEY = 'flappypig_scores_local'; // storage key for leaderboard (name -> score)
+
+// get leaderboard object { name:score, ... }
+function getAllScores(){
+  try {
+    return JSON.parse(localStorage.getItem(LB_KEY) || '{}');
+  } catch(e){
+    return {};
+  }
+}
+function saveAllScores(obj){
+  try{
+    localStorage.setItem(LB_KEY, JSON.stringify(obj));
+  }catch(e){}
+}
+// render leaderboard in overlay
+function renderLeaderboard(){
+  const box = document.getElementById('leaderboardList');
+  const obj = getAllScores();
+  const rows = Object.keys(obj).map(n => ({ name: n, score: obj[n] }));
+  rows.sort((a,b)=> b.score - a.score || a.name.localeCompare(b.name));
+  if(rows.length === 0){
+    box.innerHTML = '<div style="color:#999">no high scores yet — be the first!</div>';
+    return;
+  }
+  let html = '<ol style="margin:6px 0 0 18px;padding:0;">';
+  rows.slice(0,10).forEach(r=>{
+    html += `<li style="margin-bottom:6px">${escapeHtml(r.name)} — <strong style="color:#ff4678">${r.score}</strong></li>`;
+  });
+  html += '</ol>';
+  box.innerHTML = html;
+}
+// escape helper
+function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// submit player's highscore (only if name provided)
+function submitPlayerScore(name, sc){
+  if(!name) return;
+  const all = getAllScores();
+  const prev = Number(all[name]||0);
+  if(sc > prev){
+    all[name] = sc;
+    saveAllScores(all);
+  }
+  renderLeaderboard();
+}
+
+/* ------------------ END ADDED ------------------ */
+
 // reset / init
 function init(){
   pig = { x:86, y:LOGICAL_H/2, r:22, vy:0, rot:0, wing:0 };
@@ -70,7 +167,13 @@ function init(){
   scoreEl.textContent = 'score: 0';
   retryBtn.style.display = 'none';
   hintEl.style.opacity = 1;
+  // keep previous behavior for legacy localstorage key (single value)
   highscore = Number(localStorage.getItem('flappypig_high')||0);
+  // if playerName exists, prefer per-name highscore from our leaderboard store
+  if(playerName){
+    const all = getAllScores();
+    if(all[playerName]) highscore = Number(all[playerName]);
+  }
 
   for(let i=0;i<6;i++) clouds.push({ x:rand(-200,LOGICAL_W+200), y:rand(40,LOGICAL_H*0.6), s:rand(0.7,1.4), speed:rand(0.15,0.6), a:rand(0.35,0.9) });
   for(let i=0;i<80;i++) sparkles.push({ x:rand(0,LOGICAL_W), y:rand(0,LOGICAL_H), r:rand(0.5,2.2), a:rand(0.2,0.9), dy:rand(0.2,0.9), tw:rand(0.01,0.05) });
@@ -216,6 +319,10 @@ function stop(){
   running = false;
   retryBtn.style.display = 'block';
   hintEl.style.opacity = 0;
+  // ADDED: submit player's score to local leaderboard if they used a name
+  if(playerName){
+    submitPlayerScore(playerName, score);
+  }
 }
 
 // render everything
@@ -263,15 +370,53 @@ function restart(){
 }
 
 // input
-window.addEventListener('keydown', e => { if(e.code === 'Space'){ e.preventDefault(); flap(); }});
+window.addEventListener('keydown', e => { if(e.code === 'Space'){ e.preventDefault(); flap(); }}); 
 canvas.addEventListener('mousedown', ()=> flap());
 canvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); flap(); }, {passive:false});
 heartBtn.addEventListener('click', ()=> flap());
 retryBtn.addEventListener('click', ()=> restart());
 window.addEventListener('resize', ()=>{ /* canvas css handles scaling */ });
 
-// start
-init(); loop();
+/* ------------------ ADDED: Start button wiring ------------------ */
+const startOverlay = document.getElementById('startOverlay');
+const startBtn = document.getElementById('startBtn');
+const nameInput = document.getElementById('nameInput');
+
+function beginGameForName(name){
+  playerName = (name || '').trim().substring(0,20);
+  if(!playerName){
+    alert('Please enter your name to start');
+    nameInput.focus();
+    return;
+  }
+  try { localStorage.setItem('flappypig_player', playerName); } catch(e){}
+  startOverlay.style.display = 'none';
+  init();
+  loop();
+}
+
+// when Start clicked
+startBtn.addEventListener('click', ()=> {
+  beginGameForName(nameInput.value);
+});
+
+// allow Enter to start
+nameInput.addEventListener('keydown', (e)=> {
+  if(e.key === 'Enter'){ beginGameForName(nameInput.value); }
+});
+
+// prefill name input from last saved name and render leaderboard on load
+(function initStartOverlay(){
+  const saved = localStorage.getItem('flappypig_player') || '';
+  nameInput.value = saved;
+  renderLeaderboard();
+})();
+
+/* ------------------ END ADDED ------------------ */
+
+// NOTE: original code previously auto-ran init(); loop(); — we DO NOT auto-start now.
+// Start the game by entering a name and pressing Start (overlay). This keeps your "start screen" requirement.
+
 </script>
 </body>
 </html>
