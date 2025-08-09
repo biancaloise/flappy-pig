@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flappy Pig</title>
+    <style>
+        body {
+            margin: 0;
+            background: #b3e5fc; /* pastel blue */
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            margin: auto;
+            background: #b3e5fc;
+        }
+    </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="400" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let pig = {
+    x: 50,
+    y: 300,
+    radius: 18,
+    gravity: 0.5,
+    lift: -8,
+    velocity: 0
+};
+
+let pipes = [];
+let frame = 0;
+let score = 0;
+let gameOver = false;
+
+// draw pig (cute)
+function drawPig() {
+    ctx.beginPath();
+    ctx.arc(pig.x, pig.y, pig.radius, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffb6c1"; // pink
+    ctx.fill();
+    ctx.closePath();
+
+    // ears
+    ctx.beginPath();
+    ctx.moveTo(pig.x - 10, pig.y - 15);
+    ctx.lineTo(pig.x - 15, pig.y - 25);
+    ctx.lineTo(pig.x - 5, pig.y - 20);
+    ctx.fillStyle = "#ffb6c1";
+    ctx.fill();
+    ctx.closePath();
+
+    ctx.beginPath();
+    ctx.moveTo(pig.x + 10, pig.y - 15);
+    ctx.lineTo(pig.x + 15, pig.y - 25);
+    ctx.lineTo(pig.x + 5, pig.y - 20);
+    ctx.fillStyle = "#ffb6c1";
+    ctx.fill();
+    ctx.closePath();
+
+    // eyes
+    ctx.beginPath();
+    ctx.arc(pig.x - 6, pig.y - 4, 3, 0, Math.PI * 2);
+    ctx.arc(pig.x + 6, pig.y - 4, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "black";
+    ctx.fill();
+
+    // blush
+    ctx.beginPath();
+    ctx.arc(pig.x - 10, pig.y + 5, 3, 0, Math.PI * 2);
+    ctx.arc(pig.x + 10, pig.y + 5, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "#ff69b4";
+    ctx.fill();
+
+    // nose
+    ctx.beginPath();
+    ctx.arc(pig.x, pig.y + 2, 6, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffc0cb";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(pig.x - 2, pig.y + 2, 1, 0, Math.PI * 2);
+    ctx.arc(pig.x + 2, pig.y + 2, 1, 0, Math.PI * 2);
+    ctx.fillStyle = "black";
+    ctx.fill();
+
+    // tiny wings
+    ctx.beginPath();
+    ctx.arc(pig.x - 15, pig.y, 6, 0, Math.PI * 2);
+    ctx.arc(pig.x + 15, pig.y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+}
+
+// draw pipes (softer colors)
+function drawPipes() {
+    ctx.fillStyle = "#a5d6a7"; // pastel green
+    pipes.forEach(pipe => {
+        ctx.fillRect(pipe.x, 0, pipe.width, pipe.top);
+        ctx.fillRect(pipe.x, canvas.height - pipe.bottom, pipe.width, pipe.bottom);
+    });
+}
+
+// draw score
+function drawScore() {
+    ctx.fillStyle = "white";
+    ctx.font = "24px Arial";
+    ctx.fillText(`Score: ${score}`, 10, 30);
+}
+
+// update game
+function update() {
+    if (gameOver) return;
+
+    pig.velocity += pig.gravity;
+    pig.y += pig.velocity;
+
+    if (frame % 90 === 0) {
+        let gap = 130;
+        let top = Math.random() * (canvas.height / 2);
+        let bottom = canvas.height - top - gap;
+        pipes.push({ x: canvas.width, width: 40, top, bottom });
+    }
+
+    pipes.forEach(pipe => {
+        pipe.x -= 2;
+        if (pipe.x + pipe.width < 0) {
+            pipes.shift();
+            score++;
+        }
+    });
+
+    // collision detection
+    pipes.forEach(pipe => {
+        if (
+            pig.x + pig.radius > pipe.x &&
+            pig.x - pig.radius < pipe.x + pipe.width &&
+            (pig.y - pig.radius < pipe.top || pig.y + pig.radius > canvas.height - pipe.bottom)
+        ) {
+            gameOver = true;
+        }
+    });
+
+    if (pig.y + pig.radius >= canvas.height || pig.y - pig.radius <= 0) {
+        gameOver = true;
+    }
+}
+
+// draw clouds
+function drawClouds() {
+    ctx.fillStyle = "white";
+    ctx.beginPath();
+    ctx.arc(80, 80, 20, 0, Math.PI * 2);
+    ctx.arc(100, 80, 25, 0, Math.PI * 2);
+    ctx.arc(120, 80, 20, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(300, 150, 20, 0, Math.PI * 2);
+    ctx.arc(320, 150, 25, 0, Math.PI * 2);
+    ctx.arc(340, 150, 20, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+// main draw
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawClouds();
+    drawPipes();
+    drawPig();
+    drawScore();
+    if (gameOver) {
+        ctx.fillStyle = "white";
+        ctx.font = "36px Arial";
+        ctx.fillText("Game Over", 120, 300);
+    }
+}
+
+// loop
+function gameLoop() {
+    update();
+    draw();
+    frame++;
+    requestAnimationFrame(gameLoop);
+}
+
+window.addEventListener("keydown", () => {
+    pig.velocity = pig.lift;
+});
+
+gameLoop();
+</script>
+</body>
+</html>
