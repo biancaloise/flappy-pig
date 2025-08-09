@@ -1,235 +1,237 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Flappy Pig</title>
 <style>
   body {
     margin: 0;
     overflow: hidden;
-    background: linear-gradient(#aeefff, #ffffff);
-    font-family: 'Comic Sans MS', cursive;
+    background: #fce4ec;
+    font-family: 'Comic Sans MS', cursive, sans-serif;
   }
   canvas {
     display: block;
-    margin: auto;
-    background: transparent;
   }
-  #overlay {
+  #ui {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    color: #ff69b4;
+    font-size: 20px;
+  }
+  #leaderboard {
+    margin-top: 10px;
+  }
+  #startScreen, #gameOverScreen {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(255,255,255,0.8);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.8);
-    font-family: 'Comic Sans MS', cursive;
   }
   button {
+    background: #ff69b4;
+    color: white;
     padding: 10px 20px;
-    background: pink;
-    border: none;
-    border-radius: 10px;
     font-size: 18px;
+    border: none;
+    border-radius: 20px;
     cursor: pointer;
   }
-  input {
-    padding: 8px;
+  #loiseTag {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
     font-size: 16px;
-    margin-bottom: 10px;
-    border-radius: 5px;
-    border: 1px solid #ccc;
+    color: pink;
   }
-  ul {
-    list-style: none;
-    padding: 0;
-    margin-top: 15px;
-    text-align: center;
-  }
-  li {
-    font-size: 16px;
+  #heartButton {
+    position: absolute;
+    bottom: 50px;
+    right: 20px;
+    background: pink;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    border: none;
+    font-size: 30px;
+    color: white;
+    cursor: pointer;
   }
 </style>
 </head>
 <body>
-<div id="overlay">
-  <input type="text" id="playerName" placeholder="Enter your name">
+<div id="ui"></div>
+<div id="startScreen">
+  <h1 style="color:#ff69b4;">🐷 Flappy Pig 🐷</h1>
+  <input id="playerName" placeholder="Enter your name" style="padding:5px; font-size:16px;">
   <button onclick="startGame()">Start Game</button>
-  <h3>Leaderboard</h3>
-  <ul id="leaderboard"></ul>
+  <div id="leaderboard"></div>
 </div>
-<canvas id="gameCanvas" width="400" height="600"></canvas>
+<div id="gameOverScreen" style="display:none;">
+  <h2 style="color:#ff69b4;">Game Over!</h2>
+  <button onclick="startGame()">Retry</button>
+  <div id="leaderboard"></div>
+</div>
+<div id="loiseTag">loise cute :P</div>
+<button id="heartButton" onclick="flap()">❤️</button>
+<canvas id="gameCanvas"></canvas>
+
 <script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-let pig, gravity, lift, pipes, score, gameOver, playerName;
-let leaderboard = JSON.parse(localStorage.getItem('flappyPigScores') || '[]');
+let pig, pipes, clouds, sparkles, score, gravity, gameOver, started, playerName;
+let pipeGap = 200, pipeWidth = 80, pigSize = 40;
+let leaderData = JSON.parse(localStorage.getItem("leaderboard") || "[]");
 
-// Draw sparkle background
-function drawSparkles() {
-  for (let i = 0; i < 50; i++) {
-    ctx.fillStyle = 'white';
-    ctx.beginPath();
-    ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-// Pig with wings
 function drawPig(x, y) {
-  ctx.fillStyle = 'pink';
+  ctx.fillStyle = "#ffc0cb";
   ctx.beginPath();
-  ctx.arc(x, y, 15, 0, Math.PI * 2); // body
+  ctx.arc(x, y, pigSize/2, 0, Math.PI*2);
   ctx.fill();
-
-  ctx.fillStyle = '#ffb6c1';
+  ctx.fillStyle = "#ff69b4";
   ctx.beginPath();
-  ctx.arc(x + 15, y - 10, 8, 0, Math.PI * 2); // head
+  ctx.arc(x+8, y-10, 5, 0, Math.PI*2); // ear
   ctx.fill();
-
-  ctx.fillStyle = 'white';
+  ctx.fillStyle = "white";
   ctx.beginPath();
-  ctx.moveTo(x - 10, y);
-  ctx.lineTo(x - 25, y - 10);
-  ctx.lineTo(x - 25, y + 10);
-  ctx.closePath();
-  ctx.fill(); // wing
+  ctx.ellipse(x+15, y, 15, 8, 0, 0, Math.PI*2); // wing
+  ctx.fill();
 }
 
-// Pipe
 function drawPipe(pipe) {
-  ctx.fillStyle = 'green';
-  ctx.fillRect(pipe.x, 0, pipe.width, pipe.top);
-  ctx.fillRect(pipe.x, canvas.height - pipe.bottom, pipe.width, pipe.bottom);
+  ctx.fillStyle = "#00cc66";
+  ctx.fillRect(pipe.x, 0, pipeWidth, pipe.top);
+  ctx.fillRect(pipe.x, pipe.bottom, pipeWidth, canvas.height - pipe.bottom);
 }
 
-// Start game
-function startGame() {
-  playerName = document.getElementById('playerName').value || 'Player';
-  document.getElementById('overlay').style.display = 'none';
-  resetGame();
-  requestAnimationFrame(gameLoop);
+function drawCloud(cloud) {
+  ctx.fillStyle = "white";
+  ctx.beginPath();
+  ctx.arc(cloud.x, cloud.y, 20, 0, Math.PI*2);
+  ctx.arc(cloud.x+30, cloud.y+10, 25, 0, Math.PI*2);
+  ctx.arc(cloud.x-30, cloud.y+10, 25, 0, Math.PI*2);
+  ctx.fill();
+}
+
+function drawSparkle(s) {
+  ctx.fillStyle = "yellow";
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, 2, 0, Math.PI*2);
+  ctx.fill();
 }
 
 function resetGame() {
-  pig = { x: 80, y: canvas.height / 2, velocity: 0 };
+  pig = {x: canvas.width/4, y: canvas.height/2, velocity: 0};
   gravity = 0.4;
-  lift = -8;
   pipes = [];
+  clouds = [];
+  sparkles = [];
   score = 0;
   gameOver = false;
-  spawnPipe();
+  started = true;
+  for (let i=0; i<5; i++) {
+    clouds.push({x: Math.random()*canvas.width, y: Math.random()*canvas.height/2});
+    sparkles.push({x: Math.random()*canvas.width, y: Math.random()*canvas.height});
+  }
 }
 
-function spawnPipe() {
-  const gap = 140;
-  const top = Math.random() * (canvas.height - gap - 100) + 50;
-  pipes.push({ x: canvas.width, top: top, bottom: canvas.height - top - gap, width: 40 });
+function flap() {
+  if (!gameOver && started) pig.velocity = -7;
+}
+
+function startGame() {
+  playerName = document.getElementById("playerName").value || "Anonymous";
+  document.getElementById("startScreen").style.display = "none";
+  document.getElementById("gameOverScreen").style.display = "none";
+  resetGame();
 }
 
 function update() {
+  if (!started) return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // background sparkles
+  sparkles.forEach(s => {
+    drawSparkle(s);
+    s.y += 1;
+    if (s.y > canvas.height) { s.y = 0; s.x = Math.random()*canvas.width; }
+  });
+
+  // clouds
+  clouds.forEach(c => {
+    drawCloud(c);
+    c.x -= 1;
+    if (c.x < -50) { c.x = canvas.width + 50; c.y = Math.random()*canvas.height/2; }
+  });
+
+  // pipes
+  if (Math.random() < 0.02) {
+    let top = Math.random()*(canvas.height - pipeGap - 100) + 50;
+    pipes.push({x: canvas.width, top: top, bottom: top + pipeGap});
+  }
+  pipes.forEach(p => {
+    p.x -= 3;
+    drawPipe(p);
+  });
+  pipes = pipes.filter(p => p.x + pipeWidth > 0);
+
+  // pig physics
   pig.velocity += gravity;
   pig.y += pig.velocity;
-
-  if (pig.y + 15 > canvas.height) gameOver = true;
-  if (pig.y - 15 < 0) pig.y = 15;
-
-  for (let i = pipes.length - 1; i >= 0; i--) {
-    let pipe = pipes[i];
-    pipe.x -= 2;
-    if (pipe.x + pipe.width < 0) {
-      pipes.splice(i, 1);
-      score++;
-      spawnPipe();
-    }
-    // collision
-    if (pig.x + 15 > pipe.x && pig.x - 15 < pipe.x + pipe.width &&
-       (pig.y - 15 < pipe.top || pig.y + 15 > canvas.height - pipe.bottom)) {
-      gameOver = true;
-    }
-  }
-}
-
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawSparkles();
-
-  // Clouds
-  ctx.fillStyle = 'white';
-  ctx.beginPath();
-  ctx.arc(60, 60, 20, 0, Math.PI * 2);
-  ctx.arc(80, 60, 25, 0, Math.PI * 2);
-  ctx.arc(100, 60, 20, 0, Math.PI * 2);
-  ctx.fill();
-
-  pipes.forEach(drawPipe);
   drawPig(pig.x, pig.y);
 
-  ctx.fillStyle = 'black';
-  ctx.font = '20px Comic Sans MS';
-  ctx.fillText('Score: ' + score, 10, 30);
-
-  ctx.fillStyle = 'pink';
-  ctx.font = '16px Comic Sans MS';
-  ctx.fillText('loise cute :P', canvas.width / 2 - 40, canvas.height - 10);
-}
-
-function gameLoop() {
-  if (!gameOver) {
-    update();
-    draw();
-    requestAnimationFrame(gameLoop);
-  } else {
-    saveScore();
-    showGameOver();
+  // collision
+  for (let p of pipes) {
+    if (pig.x + pigSize/2 > p.x && pig.x - pigSize/2 < p.x + pipeWidth &&
+       (pig.y - pigSize/2 < p.top || pig.y + pigSize/2 > p.bottom)) {
+      endGame();
+    }
+    if (p.x + pipeWidth === pig.x) score++;
   }
+
+  if (pig.y > canvas.height || pig.y < 0) endGame();
+
+  // score display
+  ctx.fillStyle = "#ff69b4";
+  ctx.font = "30px Comic Sans MS";
+  ctx.fillText(score, canvas.width/2, 50);
+
+  requestAnimationFrame(update);
 }
 
-function saveScore() {
-  leaderboard.push({ name: playerName, score: score });
-  leaderboard.sort((a, b) => b.score - a.score);
-  leaderboard = leaderboard.slice(0, 5);
-  localStorage.setItem('flappyPigScores', JSON.stringify(leaderboard));
+function endGame() {
+  gameOver = true;
+  started = false;
+  leaderData.push({name: playerName, score: score});
+  leaderData.sort((a,b)=>b.score-a.score);
+  leaderData = leaderData.slice(0,5);
+  localStorage.setItem("leaderboard", JSON.stringify(leaderData));
+  showLeaderboard();
+  document.getElementById("gameOverScreen").style.display = "flex";
 }
 
-function showGameOver() {
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = 'black';
-  ctx.font = '30px Comic Sans MS';
-  ctx.fillText('Game Over', canvas.width / 2 - 70, canvas.height / 2 - 20);
-
-  let retryBtn = document.createElement('button');
-  retryBtn.textContent = 'Retry';
-  retryBtn.style.position = 'absolute';
-  retryBtn.style.left = '50%';
-  retryBtn.style.top = '60%';
-  retryBtn.style.transform = 'translate(-50%, -50%)';
-  retryBtn.onclick = () => {
-    retryBtn.remove();
-    resetGame();
-    requestAnimationFrame(gameLoop);
-  };
-  document.body.appendChild(retryBtn);
+function showLeaderboard() {
+  let lbHTML = "<h3>Leaderboard</h3><ol>";
+  leaderData.forEach(e => { lbHTML += `<li>${e.name}: ${e.score}</li>`; });
+  lbHTML += "</ol>";
+  document.querySelectorAll("#leaderboard").forEach(div => div.innerHTML = lbHTML);
 }
 
-function renderLeaderboard() {
-  let lb = document.getElementById('leaderboard');
-  lb.innerHTML = '';
-  leaderboard.forEach(e => {
-    let li = document.createElement('li');
-    li.textContent = `${e.name}: ${e.score}`;
-    lb.appendChild(li);
-  });
-}
+showLeaderboard();
+update();
 
-renderLeaderboard();
-
-window.addEventListener('keydown', () => pig.velocity = lift);
-canvas.addEventListener('click', () => pig.velocity = lift);
-
+window.addEventListener("keydown", e => { if (e.code === "Space") flap(); });
 </script>
 </body>
 </html>
